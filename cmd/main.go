@@ -3,7 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+
 	"gvte/internal/config"
+	"gvte/internal/window"
 )
 
 func main() {
@@ -11,6 +14,12 @@ func main() {
 	flag.Parse()
 
 	config.Debug = *debug
+	log.Println("debug:", config.Debug)
 
-	fmt.Println("debug:", config.Debug)
+	window.Run()
+
+	if err := window.Run(); err != nil {
+		log.Fatal(err)
+	}
+
 }
