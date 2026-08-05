@@ -4,7 +4,6 @@ import (
 	"io"
 )
 
-// Winsize represents terminal window dimensions.
 type Winsize struct {
 	Rows int
 	Cols int
@@ -12,7 +11,6 @@ type Winsize struct {
 	Y    int
 }
 
-// PTY represents an operating system pseudo-terminal session.
 type PTY interface {
 	io.ReadWriteCloser
 	Resize(cols, rows int) error

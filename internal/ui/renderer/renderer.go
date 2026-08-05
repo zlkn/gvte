@@ -8,13 +8,11 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-// Renderer draws terminal grid cells and decorations onto screen destination.
 type Renderer struct {
 	FontMgr *font.FontManager
 	Config  *config.Config
 }
 
-// New creates a new UI Renderer instance.
 func New(fm *font.FontManager, cfg *config.Config) *Renderer {
 	return &Renderer{
 		FontMgr: fm,

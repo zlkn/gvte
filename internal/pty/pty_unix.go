@@ -8,16 +8,14 @@ import (
 	"os/exec"
 )
 
-// UnixPTY implements PTY interface for Unix-like systems (Linux, macOS).
 type UnixPTY struct {
 	master *os.File
 	slave  *os.File
 	cmd    *exec.Cmd
 }
 
-// Start launches a command attached to a new master-slave PTY session.
 func Start(cmd *exec.Cmd, sz *Winsize) (PTY, error) {
-	// Stub for Unix termios / master-slave PTY initialization
+	//TODO Stub for Unix termios / master-slave PTY initialization
 	return nil, fmt.Errorf("Unix PTY implementation pending termios setup")
 }
 
@@ -46,7 +44,7 @@ func (p *UnixPTY) Close() error {
 }
 
 func (p *UnixPTY) Resize(cols, rows int) error {
-	// Stub for TIOCSWINSZ ioctl
+	//TODO Stub for TIOCSWINSZ ioctl
 	return nil
 }
 

@@ -5,10 +5,8 @@ import (
 	"image/color"
 )
 
-// Debug enables verbose debug logging when set to true.
 var Debug bool
 
-// ColorScheme defines the terminal color palette.
 type ColorScheme struct {
 	Background color.Color
 	Foreground color.Color
@@ -17,23 +15,20 @@ type ColorScheme struct {
 	Ansi       [16]color.Color
 }
 
-// FontConfig defines font settings for the terminal.
 type FontConfig struct {
 	Family string
 	Size   float64
 	DPI    float64
 }
 
-// Config represents the application configuration.
 type Config struct {
-	Font        FontConfig
-	Colors      ColorScheme
+	Font          FontConfig
+	Colors        ColorScheme
 	InitialWidth  int
 	InitialHeight int
-	Shell       string
+	Shell         string
 }
 
-// DefaultConfig returns a sane default configuration.
 func DefaultConfig() *Config {
 	return &Config{
 		Font: FontConfig{
@@ -53,7 +48,7 @@ func DefaultConfig() *Config {
 	}
 }
 
-// Load loads application configuration from disk or defaults.
+// TODO: Load loads application configuration from disk or defaults.
 func Load(path string) (*Config, error) {
 	// Stub for loading config from path (e.g. YAML/TOML/JSON)
 	if path == "" {
