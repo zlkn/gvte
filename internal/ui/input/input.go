@@ -10,7 +10,7 @@ func NewMapper() *InputMapper {
 	return &InputMapper{}
 }
 
-func (im *InputMapper) MapKey(key ebiten.Key, mods ebiten.Key) []byte {
+func (im *InputMapper) MapKey() []byte {
 	// NOTE: mocked
 	return nil
 }
