@@ -1,6 +1,9 @@
 GO ?= go
 BINARY_NAME ?= bin/terminal
 CMD_DIR ?= ./cmd/terminal
+# GLFW picks its display backend at compile time; empty TAGS builds the X11 backend.
+TAGS ?= wayland
+GOFLAGS_TAGS := $(if $(TAGS),-tags $(TAGS),)
 
 .PHONY: all build run test clean help
 
@@ -8,10 +11,10 @@ all: build
 
 build: ## Build the terminal application binary
 	@mkdir -p bin
-	$(GO) build -o $(BINARY_NAME) $(CMD_DIR)
+	$(GO) build $(GOFLAGS_TAGS) -o $(BINARY_NAME) $(CMD_DIR)
 
 run: ## Run the terminal application directly
-	$(GO) run $(CMD_DIR)
+	$(GO) run $(GOFLAGS_TAGS) $(CMD_DIR)
 
 test: ## Run unit tests across all packages
 	$(GO) test -v ./...
