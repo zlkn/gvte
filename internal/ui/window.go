@@ -2,61 +2,64 @@ package ui
 
 import (
 	"log"
+	"runtime"
 
-	"gvte/internal/config"
-	"gvte/internal/emulator"
-	"gvte/internal/ui/font"
-	"gvte/internal/ui/input"
-	"gvte/internal/ui/renderer"
+	// "gvte/internal/config"
+	// "gvte/internal/emulator"
+	// "gvte/internal/ui/font"
+	// "gvte/internal/ui/input"
+	// "gvte/internal/ui/renderer"
 
-	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/go-gl/glfw/v3.3/glfw"
+	"github.com/rajveermalviya/go-webgpu/wgpu"
 )
 
-type AppWindow struct {
-	Config   *config.Config
-	State    *emulator.State
-	Renderer *renderer.Renderer
-	Input    *input.InputMapper
-	FontMgr  *font.FontManager
+func init() {
+	// GLFW requires the main thread to safely interact with the OS window manager
+	runtime.LockOSThread()
 }
 
-func NewWindow(cfg *config.Config, st *emulator.State) (*AppWindow, error) {
-	fm, err := font.NewManager(cfg.Font.Family, cfg.Font.Size)
+func main() {
+	if err := glfw.Init(); err != nil {
+		log.Fatalf("Failed to initialize GLFW: %v", err)
+	}
+	defer glfw.Terminate()
+
+	// 1. Tell GLFW NOT to create an OpenGL context. We are using WebGPU!
+	glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
+
+	// Create the window
+	window, err := glfw.CreateWindow(800, 600, "WebGPU Terminal", nil, nil)
 	if err != nil {
-		return nil, err
+		log.Fatalf("Failed to create window: %v", err)
 	}
 
-	rend := renderer.New(fm, cfg)
-	inp := input.NewMapper()
+	// 2. Initialize WebGPU Instance
+	instance := wgpu.CreateInstance(&wgpu.InstanceDescriptor{
+		// Optional: you can specify backends like Vulkan, Metal, DX12 explicitly
+	})
+	defer instance.Release()
 
-	return &AppWindow{
-		Config:   cfg,
-		State:    st,
-		Renderer: rend,
-		Input:    inp,
-		FontMgr:  fm,
-	}, nil
-}
+	// 3. THE BRIDGE: Create a WebGPU surface from the GLFW window
+	// The rajveermalviya package abstracts away the nasty OS-specific handle extraction
+	surface := instance.CreateSurface(window.GetX11Window(), window.GetX11Display())
+	// Note: In actual implementation, you use platform-specific getters based on GOOS,
+	// e.g., window.GetWin32Window() or window.GetCocoaWindow().
 
-func (w *AppWindow) Update() error {
-	//TODO: Handle window resize or input processing
-	return nil
-}
+	defer surface.Release()
 
-func (w *AppWindow) Draw(screen *ebiten.Image) {
-	w.Renderer.Render(screen, w.State)
-}
+	// 4. Request the GPU adapter and device to start rendering
+	adapter, err := instance.RequestAdapter(&wgpu.RequestAdapterOptions{
+		CompatibleSurface: surface,
+	})
+	if err != nil {
+		log.Fatalf("Failed to get adapter: %v", err)
+	}
+	defer adapter.Release()
 
-func (w *AppWindow) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
-	return outsideWidth, outsideHeight
-}
-
-func (w *AppWindow) Run() error {
-	ebiten.SetWindowSize(w.Config.InitialWidth, w.Config.InitialHeight)
-	ebiten.SetWindowTitle("Terminal")
-	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
-	ebiten.SetScreenClearedEveryFrame(true)
-
-	log.Println("Starting terminal window UI loop...")
-	return ebiten.RunGame(w)
+	// Setup your Render Loop here using glfw.PollEvents()
+	for !window.ShouldClose() {
+		glfw.PollEvents()
+		// RenderFrame(...)
+	}
 }
