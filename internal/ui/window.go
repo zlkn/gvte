@@ -28,6 +28,7 @@ type Window struct {
 	adapter     *wgpu.Adapter
 	device      *wgpu.Device
 	queue       *wgpu.Queue
+	swapChain   *wgpu.SwapChain
 	renderer    *renderer.Renderer
 	fontMgr     *font.FontManager
 	inputMapper *input.InputMapper
@@ -77,17 +78,34 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 
 	queue := device.GetQueue()
 
+	width, height := glfwWin.GetFramebufferSize()
+	prefFormat := surface.GetPreferredFormat(adapter)
+
+	swapChain, err := device.CreateSwapChain(surface, &wgpu.SwapChainDescriptor{
+		Usage:       wgpu.TextureUsage_RenderAttachment,
+		Format:      prefFormat,
+		Width:       uint32(width),
+		Height:      uint32(height),
+		PresentMode: wgpu.PresentMode_Fifo, // Fifo включает VSync
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create swap chain: %w", err)
+	}
+
 	fontMgr, err := font.NewManager(cfg.Font.Family, cfg.Font.Size)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize font manager: %w", err)
 	}
 
-	rnd := renderer.New(fontMgr, cfg)
+	rnd := renderer.New(fontMgr, cfg, device, queue, swapChain)
 	inputMapper := input.NewMapper()
 
 	glfwWin.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		inputMapper.HandleKey(key, action, mods)
 	})
+
+	glfwWin.Show()
+	glfwWin.Focus()
 
 	return &Window{
 		cfg:         cfg,
@@ -98,6 +116,7 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 		adapter:     adapter,
 		device:      device,
 		queue:       queue,
+		swapChain:   swapChain,
 		renderer:    rnd,
 		fontMgr:     fontMgr,
 		inputMapper: inputMapper,
@@ -119,6 +138,9 @@ func (w *Window) Run() error {
 			w.instance.Release()
 		}
 		if w.glfwWindow != nil {
+			if w.swapChain != nil {
+				w.swapChain.Release() // <--- ДОБАВИТЬ ЭТО
+			}
 			w.glfwWindow.Destroy()
 		}
 		glfw.Terminate()
@@ -126,7 +148,7 @@ func (w *Window) Run() error {
 
 	for !w.glfwWindow.ShouldClose() {
 		glfw.PollEvents()
-		w.renderer.Render(w.state)
+		w.renderer.Render(w.state, w.fontMgr, w.cfg)
 	}
 
 	return nil

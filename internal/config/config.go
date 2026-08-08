@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"image/color"
+
+	"github.com/rajveermalviya/go-webgpu/wgpu"
 )
 
 var Debug bool
@@ -27,6 +29,16 @@ type Config struct {
 	InitialWidth  int
 	InitialHeight int
 	Shell         string
+}
+
+func ColorToWgpu(c color.Color) wgpu.Color {
+	r, g, b, a := c.RGBA() // Возвращает uint32 от 0 до 65535
+	return wgpu.Color{
+		R: float64(r) / 65535.0,
+		G: float64(g) / 65535.0,
+		B: float64(b) / 65535.0,
+		A: float64(a) / 65535.0,
+	}
 }
 
 func DefaultConfig() *Config {
