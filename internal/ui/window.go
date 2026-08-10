@@ -78,14 +78,13 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 
 	queue := device.GetQueue()
 
-	width, height := glfwWin.GetFramebufferSize()
 	prefFormat := surface.GetPreferredFormat(adapter)
 
 	swapChain, err := device.CreateSwapChain(surface, &wgpu.SwapChainDescriptor{
 		Usage:       wgpu.TextureUsage_RenderAttachment,
 		Format:      prefFormat,
-		Width:       uint32(width),
-		Height:      uint32(height),
+		Width:       uint32(cfg.InitialWidth),
+		Height:      uint32(cfg.InitialHeight),
 		PresentMode: wgpu.PresentMode_Fifo, // Fifo включает VSync
 	})
 	if err != nil {
@@ -100,14 +99,10 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 	rnd := renderer.New(fontMgr, cfg, device, queue, swapChain)
 	inputMapper := input.NewMapper()
 
-	glfwWin.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
-		inputMapper.HandleKey(key, action, mods)
-	})
-
 	glfwWin.Show()
 	glfwWin.Focus()
 
-	return &Window{
+	win := Window{
 		cfg:         cfg,
 		state:       state,
 		glfwWindow:  glfwWin,
@@ -120,7 +115,17 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 		renderer:    rnd,
 		fontMgr:     fontMgr,
 		inputMapper: inputMapper,
-	}, nil
+	}
+
+	glfwWin.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
+		fmt.Println("Recieved SetFramebufferSizeCallback width: %d, height: %d", width, height)
+	})
+
+	glfwWin.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+		inputMapper.HandleKey(key, action, mods)
+	})
+
+	return &win, nil
 }
 
 func (w *Window) Run() error {
@@ -148,8 +153,52 @@ func (w *Window) Run() error {
 
 	for !w.glfwWindow.ShouldClose() {
 		glfw.PollEvents()
-		w.renderer.Render(w.state, w.fontMgr, w.cfg)
+		// FIXME
+		// w.renderer.Render(w.state)
 	}
 
 	return nil
+}
+
+func (w *Window) resizeSwapChain(width, height int) {
+	if width == 0 || height == 0 {
+		return
+	}
+
+	if w.swapChain != nil {
+		w.swapChain.Release()
+	}
+
+	prefFormat := w.surface.GetPreferredFormat(w.adapter)
+	// 2. Создаем новый с новыми размерами
+	w.swapChain, _ = w.device.CreateSwapChain(w.surface, &wgpu.SwapChainDescriptor{
+		Usage:       wgpu.TextureUsage_RenderAttachment,
+		Format:      prefFormat,
+		Width:       uint32(width),
+		Height:      uint32(height),
+		PresentMode: wgpu.PresentMode_Fifo, // Или PresentMode_Mailbox (vsync off)
+	})
+}
+
+func (w *Window) drawFrame() {
+	view, err := w.swapChain.GetCurrentTextureView()
+	if err != nil {
+		width, height := w.glfwWindow.GetFramebufferSize()
+		w.resizeSwapChain(width, height)
+		return
+	}
+	defer view.Release()
+
+	frame, err := w.renderer.BeginFrame(view)
+	if err != nil {
+		return
+	}
+
+	width, height := w.glfwWindow.GetFramebufferSize()
+	frame.DrawPane(w.state, renderer.Rect{W: float32(width), H: float32(height)})
+
+	if err := frame.End(); err != nil {
+		return
+	}
+	w.swapChain.Present()
 }

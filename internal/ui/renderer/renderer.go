@@ -8,70 +8,73 @@ import (
 	"github.com/rajveermalviya/go-webgpu/wgpu"
 )
 
+type Rect struct{ X, Y, W, H float32 }
+
 type Renderer struct {
-	FontMgr   *font.FontManager
-	Config    *config.Config
-	Device    *wgpu.Device
-	Queue     *wgpu.Queue
-	SwapChain *wgpu.SwapChain
+	FontMgr *font.FontManager
+	Config  *config.Config
+	Device  *wgpu.Device
+	Queue   *wgpu.Queue
+}
+
+type Frame struct {
+	r       *Renderer
+	encoder *wgpu.CommandEncoder
+	pass    *wgpu.RenderPassEncoder
 }
 
 func New(fm *font.FontManager, cfg *config.Config, device *wgpu.Device, queue *wgpu.Queue, swapChain *wgpu.SwapChain) *Renderer {
 	return &Renderer{
-		FontMgr:   fm,
-		Config:    cfg,
-		Device:    device,
-		Queue:     queue,
-		SwapChain: swapChain,
+		FontMgr: fm,
+		Config:  cfg,
+		Device:  device,
+		Queue:   queue,
 	}
 }
 
-// Render draws the current terminal state.
-func (r *Renderer) Render(st *emulator.State, fm *font.FontManager, cfg *config.Config) {
-	// 1. Получаем текстуру для текущего кадра из SwapChain
-	nextTexture, err := r.SwapChain.GetCurrentTextureView()
-	if err != nil {
-		// Если окно свернуто или изменило размер, может быть ошибка.
-		// Пока просто игнорируем кадр.
-		return
-	}
-	// Обязательно освобождаем текстуру после использования
-	defer nextTexture.Release()
-
-	// 2. Создаем CommandEncoder для записи команд GPU
+func (r *Renderer) BeginFrame(view *wgpu.TextureView) (*Frame, error) {
 	encoder, err := r.Device.CreateCommandEncoder(&wgpu.CommandEncoderDescriptor{
 		Label: "Main Render Encoder",
 	})
-	defer encoder.Release()
-	bgColor := config.ColorToWgpu(cfg.Colors.Background)
-	// 3. Начинаем RenderPass. Здесь мы указываем, что хотим очистить экран.
-	renderPass := encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
-		ColorAttachments: []wgpu.RenderPassColorAttachment{
-			{
-				View:    nextTexture,
-				LoadOp:  wgpu.LoadOp_Clear,
-				StoreOp: wgpu.StoreOp_Store,
-				// Цвет заливки (Темно-серый фон терминала)
-				// ClearValue: wgpu.Color{R: 0.1, G: 0.1, B: 0.1, A: 1.0},
-				ClearValue: bgColor,
-			},
-		},
+	if err != nil {
+		return nil, err
+	}
+
+	pass := encoder.BeginRenderPass(&wgpu.RenderPassDescriptor{
+		Label: "Main Render Pass",
+		ColorAttachments: []wgpu.RenderPassColorAttachment{{
+			View:       view,
+			LoadOp:     wgpu.LoadOp_Clear,
+			StoreOp:    wgpu.StoreOp_Store,
+			ClearValue: config.ColorToWgpu(r.Config.Colors.Background),
+		}},
 	})
 
-	// TODO: Screen rendering stub (draw text grid cells, cursor, and selection)
-	// В будущем здесь будут вызовы: renderPass.SetPipeline(...), renderPass.Draw(...)
+	return &Frame{r: r, encoder: encoder, pass: pass}, nil
+}
 
-	// Завершаем проход рендеринга
-	renderPass.End()
+func (f *Frame) DrawPane(st *emulator.State, rect Rect) {
+	f.pass.SetViewport(rect.X, rect.Y, rect.W, rect.H, 0, 1)
+	f.pass.SetScissorRect(uint32(rect.X), uint32(rect.Y), uint32(rect.W), uint32(rect.H))
 
-	// 4. Завершаем запись команд и получаем CommandBuffer
-	// FIXME: silently ignored error
-	cmdBuffer, _ := encoder.Finish(nil)
-	defer cmdBuffer.Release()
+	// f.pass.SetPipeline(f.r.pipeline)
+	// f.r.queue.WriteBuffer(...)  // вершины для st.Grid
+	// f.pass.Draw(...)
+}
 
-	// 5. Отправляем команды в очередь видеокарты
-	r.Queue.Submit(cmdBuffer)
+func (f *Frame) End() error {
+	defer f.pass.Release()
+	defer f.encoder.Release()
 
-	// 6. Показываем готовый кадр на экране
-	r.SwapChain.Present()
+	if err := f.pass.End(); err != nil {
+		return err
+	}
+	cmd, err := f.encoder.Finish(nil)
+	if err != nil {
+		return err
+	}
+	defer cmd.Release()
+
+	f.r.Queue.Submit(cmd)
+	return nil
 }
