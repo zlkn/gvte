@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"runtime"
+	"sync/atomic"
 
 	"gvte/internal/config"
 	"gvte/internal/emulator"
@@ -22,6 +23,9 @@ func init() {
 type Window struct {
 	cfg         *config.Config
 	state       *emulator.State
+	fbWidth     int
+	fbHeight    int
+	dirty       atomic.Bool
 	glfwWindow  *glfw.Window
 	instance    *wgpu.Instance
 	surface     *wgpu.Surface
@@ -102,9 +106,11 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 	glfwWin.Show()
 	glfwWin.Focus()
 
-	win := Window{
+	win := &Window{
 		cfg:         cfg,
 		state:       state,
+		fbWidth:     cfg.InitialWidth,
+		fbHeight:    cfg.InitialHeight,
 		glfwWindow:  glfwWin,
 		instance:    instance,
 		surface:     surface,
@@ -117,15 +123,18 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 		inputMapper: inputMapper,
 	}
 
+	win.dirty.Store(true)
+
 	glfwWin.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		fmt.Println("Recieved SetFramebufferSizeCallback width: %d, height: %d", width, height)
+		fmt.Printf("Recieved SetFramebufferSizeCallback width: %d, height: %d", width, height)
+		win.onResize(width, height)
 	})
 
 	glfwWin.SetKeyCallback(func(w *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 		inputMapper.HandleKey(key, action, mods)
 	})
 
-	return &win, nil
+	return win, nil
 }
 
 func (w *Window) Run() error {
@@ -152,12 +161,34 @@ func (w *Window) Run() error {
 	}()
 
 	for !w.glfwWindow.ShouldClose() {
-		glfw.PollEvents()
-		// FIXME
-		// w.renderer.Render(w.state)
+		// Prevent CPU eating
+		glfw.WaitEvents()
+		if w.fbWidth > 0 && w.fbHeight > 0 && w.dirty.Swap(false) {
+			w.drawFrame()
+		}
 	}
 
 	return nil
+}
+
+func (w *Window) onResize(width, height int) {
+	w.fbWidth, w.fbHeight = width, height
+
+	// iconified — nothing valid to create
+	if width == 0 || height == 0 {
+		return
+	}
+	w.resizeSwapChain(width, height)
+
+	cols := max(1, width/w.fontMgr.CellWidth)
+	rows := max(1, height/w.fontMgr.CellHeight)
+	if cols != w.state.Grid.Cols || rows != w.state.Grid.Rows {
+		w.state.Grid.Resize(cols, rows) // internal/emulator/grid/grid.go:64
+		// TODO: w.pty.Resize(cols, rows) once internal/pty.Start is implemented
+	}
+
+	w.Damage()
+	w.drawFrame()
 }
 
 func (w *Window) resizeSwapChain(width, height int) {
@@ -201,4 +232,9 @@ func (w *Window) drawFrame() {
 		return
 	}
 	w.swapChain.Present()
+}
+
+func (w *Window) Damage() {
+	w.dirty.Store(true)
+	glfw.PostEmptyEvent()
 }
