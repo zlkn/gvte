@@ -126,7 +126,6 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 	win.dirty.Store(true)
 
 	glfwWin.SetFramebufferSizeCallback(func(w *glfw.Window, width int, height int) {
-		fmt.Printf("Recieved SetFramebufferSizeCallback width: %d, height: %d", width, height)
 		win.onResize(width, height)
 	})
 
@@ -187,7 +186,8 @@ func (w *Window) onResize(width, height int) {
 		// TODO: w.pty.Resize(cols, rows) once internal/pty.Start is implemented
 	}
 
-	w.Damage()
+	//NOTE Instant redraw instead of damage for eliminate ghoust window effect
+	// w.Damage()
 	w.drawFrame()
 }
 
