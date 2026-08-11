@@ -1,12 +1,17 @@
 package renderer
 
 import (
+	_ "embed"
+
 	"gvte/internal/config"
 	"gvte/internal/emulator"
 	"gvte/internal/ui/font"
 
 	"github.com/rajveermalviya/go-webgpu/wgpu"
 )
+
+//go:embed shader.wgsl
+var bgShaderWGSLCode string
 
 type Rect struct{ X, Y, W, H float32 }
 
@@ -53,13 +58,28 @@ func (r *Renderer) BeginFrame(view *wgpu.TextureView) (*Frame, error) {
 	return &Frame{r: r, encoder: encoder, pass: pass}, nil
 }
 
+func (r *Renderer) initBackgroundPipeline(surfaceFormat wgpu.TextureFormat) {
+}
+
 func (f *Frame) DrawPane(st *emulator.State, rect Rect) {
 	f.pass.SetViewport(rect.X, rect.Y, rect.W, rect.H, 0, 1)
 	f.pass.SetScissorRect(uint32(rect.X), uint32(rect.Y), uint32(rect.W), uint32(rect.H))
 
+	// bgColor := f.r.Config.Colors.Background
+	// fgColor := f.r.Config.Colors.Foreground
+	//
+	// f.drawBackgroundStub(bgColor)
+
+	// textX := rect.X + 20
+	// textY := rect.Y + 30
+	// f.r.FontMgr.DrawText(f.pass, text, textX, textY, fgColor)
 	// f.pass.SetPipeline(f.r.pipeline)
 	// f.r.queue.WriteBuffer(...)  // вершины для st.Grid
 	// f.pass.Draw(...)
+}
+
+func (f *Frame) drawBackgroundStub(color config.ColorScheme) {
+	// f.pass.SetPipeline(f.r.colorPipeline)
 }
 
 func (f *Frame) End() error {
