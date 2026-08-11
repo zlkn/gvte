@@ -38,7 +38,7 @@ type Window struct {
 	inputMapper *input.InputMapper
 }
 
-func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
+func NewWindow(cfg *config.Config, fontMgr *font.FontManager, state *emulator.State) (*Window, error) {
 	if err := glfw.Init(); err != nil {
 		return nil, fmt.Errorf("failed to initialize GLFW: %w", err)
 	}
@@ -95,11 +95,6 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 		return nil, fmt.Errorf("failed to create swap chain: %w", err)
 	}
 
-	fontMgr, err := font.NewManager(cfg.Font.Family, cfg.Font.Size)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize font manager: %w", err)
-	}
-
 	rnd, err := renderer.New(fontMgr, cfg, device, queue, prefFormat)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize renderer: %w", err)
@@ -143,6 +138,9 @@ func (w *Window) Run() error {
 	defer func() {
 		if w.renderer != nil {
 			w.renderer.Release()
+		}
+		if w.fontMgr != nil {
+			w.fontMgr.Close()
 		}
 		if w.device != nil {
 			w.device.Release()
