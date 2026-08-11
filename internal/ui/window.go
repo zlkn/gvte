@@ -100,7 +100,10 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 		return nil, fmt.Errorf("failed to initialize font manager: %w", err)
 	}
 
-	rnd := renderer.New(fontMgr, cfg, device, queue, swapChain)
+	rnd, err := renderer.New(fontMgr, cfg, device, queue, prefFormat)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize renderer: %w", err)
+	}
 	inputMapper := input.NewMapper()
 
 	glfwWin.Show()
@@ -138,6 +141,9 @@ func NewWindow(cfg *config.Config, state *emulator.State) (*Window, error) {
 
 func (w *Window) Run() error {
 	defer func() {
+		if w.renderer != nil {
+			w.renderer.Release()
+		}
 		if w.device != nil {
 			w.device.Release()
 		}
@@ -160,11 +166,14 @@ func (w *Window) Run() error {
 	}()
 
 	for !w.glfwWindow.ShouldClose() {
-		// Prevent CPU eating
-		glfw.WaitEvents()
+		// Draw before waiting: the window starts dirty, and WaitEvents would
+		// otherwise block until some unrelated event arrives, leaving the
+		// surface with no buffer attached until then.
 		if w.fbWidth > 0 && w.fbHeight > 0 && w.dirty.Swap(false) {
 			w.drawFrame()
 		}
+		// Prevent CPU eating
+		glfw.WaitEvents()
 	}
 
 	return nil

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"image/color"
+	"math"
 
 	"github.com/rajveermalviya/go-webgpu/wgpu"
 )
@@ -31,14 +32,50 @@ type Config struct {
 	Shell         string
 }
 
-func ColorToWgpu(c color.Color) wgpu.Color {
-	r, g, b, a := c.RGBA() // Возвращает uint32 от 0 до 65535
-	return wgpu.Color{
-		R: float64(r) / 65535.0,
-		G: float64(g) / 65535.0,
-		B: float64(b) / 65535.0,
-		A: float64(a) / 65535.0,
+// IsSrgbFormat reports whether the GPU applies the sRGB encoding transfer
+// function when writing to this format.
+func IsSrgbFormat(f wgpu.TextureFormat) bool {
+	switch f {
+	case wgpu.TextureFormat_RGBA8UnormSrgb, wgpu.TextureFormat_BGRA8UnormSrgb:
+		return true
+	default:
+		return false
 	}
+}
+
+// srgbToLinear applies the inverse sRGB transfer function to one channel.
+func srgbToLinear(v float64) float64 {
+	if v <= 0.04045 {
+		return v / 12.92
+	}
+	return math.Pow((v+0.055)/1.055, 2.4)
+}
+
+// ColorToRGBA normalizes c to [0,1]. Hex color literals are sRGB-encoded, but
+// wgpu treats both clear values and fragment output as linear and re-encodes
+// them for *UnormSrgb targets, so those must be decoded first or they render
+// far too bright. Assumes opaque colors: color.Color.RGBA is alpha-premultiplied
+// and this does not unpremultiply before decoding.
+func ColorToRGBA(c color.Color, srgbTarget bool) [4]float64 {
+	r, g, b, a := c.RGBA() // uint32 in 0..65535
+	out := [4]float64{
+		float64(r) / 65535.0,
+		float64(g) / 65535.0,
+		float64(b) / 65535.0,
+		float64(a) / 65535.0,
+	}
+	if srgbTarget {
+		for i := range 3 {
+			out[i] = srgbToLinear(out[i])
+		}
+	}
+	return out
+}
+
+// ColorToWgpu converts c into a wgpu clear value for a target of the given format.
+func ColorToWgpu(c color.Color, srgbTarget bool) wgpu.Color {
+	v := ColorToRGBA(c, srgbTarget)
+	return wgpu.Color{R: v[0], G: v[1], B: v[2], A: v[3]}
 }
 
 func DefaultConfig() *Config {
